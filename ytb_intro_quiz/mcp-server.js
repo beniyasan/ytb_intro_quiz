@@ -27,7 +27,9 @@ class PlaywrightMCPServer {
 
   setupHandlers() {
     // Tool: Launch Browser
-    this.server.setRequestHandler('tools/list', async () => ({
+    this.server.setRequestHandler(async (request) => {
+      if (request.method === 'tools/list') {
+        return {
       tools: [
         {
           name: 'launch_browser',
@@ -140,10 +142,8 @@ class PlaywrightMCPServer {
           },
         },
       ],
-    }));
-
-    // Tool execution handler
-    this.server.setRequestHandler('tools/call', async (request) => {
+    };
+      } else if (request.method === 'tools/call') {
       const { name, arguments: args } = request.params;
 
       switch (name) {
@@ -165,6 +165,9 @@ class PlaywrightMCPServer {
           return await this.waitForSelector(args);
         default:
           throw new Error(`Unknown tool: ${name}`);
+      }
+      } else {
+        throw new Error(`Unknown method: ${request.method}`);
       }
     });
   }
