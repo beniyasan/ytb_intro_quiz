@@ -37,6 +37,26 @@ services:
       timeout: 5s
       retries: 5
 
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    container_name: ytb_quiz_playwright
+    volumes:
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+      - ./playwright-report:/app/playwright-report
+    networks:
+      - ytb_quiz_network
+    environment:
+      - CI=true
+      - BASE_URL=http://app:3000
+    depends_on:
+      - postgres
+      - redis
+    profiles:
+      - test
+
 volumes:
   postgres_data:
   redis_data:

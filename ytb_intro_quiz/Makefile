@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs ps clean db-shell redis-cli
+.PHONY: help up down restart logs ps clean db-shell redis-cli test test-ui
 
 help:
 	@echo "Available commands:"
@@ -10,6 +10,8 @@ help:
 	@echo "  make clean     - Remove containers and volumes"
 	@echo "  make db-shell  - Connect to PostgreSQL"
 	@echo "  make redis-cli - Connect to Redis"
+	@echo "  make test      - Run Playwright tests in Docker"
+	@echo "  make test-ui   - Run Playwright tests with UI"
 
 up:
 	docker-compose up -d
@@ -38,3 +40,18 @@ db-shell:
 
 redis-cli:
 	docker-compose exec redis redis-cli
+
+test:
+	@echo "Building Playwright Docker image..."
+	docker-compose --profile test build playwright
+	@echo "Running Playwright tests..."
+	docker-compose --profile test run --rm playwright npm test
+
+test-ui:
+	npm run test:ui
+
+test-headed:
+	npm run test:headed
+
+test-report:
+	npm run test:report
