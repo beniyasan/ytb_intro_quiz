@@ -22,24 +22,44 @@ export default function HostPage() {
   const [answeredCount, setAnsweredCount] = useState(0);
 
   const onParticipantJoined = useCallback((participant: Participant) => {
-    console.log('New participant joined:', participant.username);
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        participants: [...prev.participants, participant]
-      } : null);
-    }
-  }, [currentSession]);
+    console.log('🔔 HOST: Received participant-joined event:', participant);
+    setCurrentSession(prev => {
+      if (prev) {
+        console.log('🔔 HOST: Current session participants before update:', prev.participants);
+        // Check if participant already exists to avoid duplicates
+        const exists = prev.participants.some(p => p.id === participant.id);
+        if (!exists) {
+          const updated = {
+            ...prev,
+            participants: [...prev.participants, participant]
+          };
+          console.log('🔔 HOST: Updated session participants:', updated.participants);
+          return updated;
+        } else {
+          console.log('🔔 HOST: Participant already exists, skipping update');
+          return prev;
+        }
+      } else {
+        console.warn('🔔 HOST: No current session available when participant joined');
+        return prev;
+      }
+    });
+  }, []);
 
   const onParticipantLeft = useCallback(({ participantId }: { participantId: string }) => {
-    console.log('Participant left:', participantId);
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        participants: prev.participants.filter(p => p.id !== participantId)
-      } : null);
-    }
-  }, [currentSession]);
+    console.log('🔔 HOST: Participant left:', participantId);
+    setCurrentSession(prev => {
+      if (prev) {
+        const updated = {
+          ...prev,
+          participants: prev.participants.filter(p => p.id !== participantId)
+        };
+        console.log('🔔 HOST: Updated participants after leave:', updated.participants);
+        return updated;
+      }
+      return prev;
+    });
+  }, []);
 
   const onAnswerReceived = useCallback(({ participantId, username }: { participantId: string; username: string }) => {
     console.log(`Answer received from: ${username}`);

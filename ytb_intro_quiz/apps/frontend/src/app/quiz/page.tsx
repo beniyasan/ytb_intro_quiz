@@ -34,24 +34,33 @@ export default function QuizPage() {
 
   const onParticipantJoined = useCallback((participant: Participant) => {
     console.log('New participant joined:', participant.username);
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        participants: [...prev.participants, participant]
-      } : null);
-    }
-  }, [currentSession]);
+    setCurrentSession(prev => {
+      if (prev) {
+        const exists = prev.participants.some(p => p.id === participant.id);
+        if (!exists) {
+          return {
+            ...prev,
+            participants: [...prev.participants, participant]
+          };
+        }
+      }
+      return prev;
+    });
+  }, []);
 
   const onParticipantLeft = useCallback(({ participantId: leftParticipantId }: { participantId: string }) => {
     console.log('Participant left:', leftParticipantId);
-    if (currentSession) {
-      setCurrentSession(prev => prev ? {
-        ...prev,
-        participants: prev.participants.filter(p => p.id !== leftParticipantId)
-      } : null);
-    }
+    setCurrentSession(prev => {
+      if (prev) {
+        return {
+          ...prev,
+          participants: prev.participants.filter(p => p.id !== leftParticipantId)
+        };
+      }
+      return prev;
+    });
     setAnsweredParticipants(prev => prev.filter(id => id !== leftParticipantId));
-  }, [currentSession]);
+  }, []);
 
   const onQuestionStarted = useCallback(({ question, questionNumber: qNum }: { question: Question; questionNumber: number }) => {
     console.log('Question started:', question.text);

@@ -109,8 +109,9 @@ export class QuizGateway
         participantId: participant.id,
       });
 
-      // Notify other participants
-      client.to(session.id).emit('participant-joined', participant);
+      // Notify all participants in the session (including host)
+      this.server.to(session.id).emit('participant-joined', participant);
+      this.logger.log(`📢 Emitted participant-joined event to room ${session.id} for participant: ${participant.username}`);
 
       this.logger.log(`✅ ${username} successfully joined session ${session.id} (${updatedSession.participants.length} total participants)`);
     } catch (error) {
@@ -234,12 +235,17 @@ export class QuizGateway
   }
 
   @SubscribeMessage('create-session')
-  handleCreateSession(
+  async handleCreateSession(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { title: string },
   ) {
     try {
       const session = this.quizService.createSession(data.title);
+      
+      // Host automatically joins the session room to receive participant updates
+      await client.join(session.id);
+      this.logger.log(`🏠 Host ${client.id} joined room ${session.id}`);
+      
       client.emit('session-created', session);
       this.logger.log(`Session created: ${session.id}`);
     } catch (error) {
