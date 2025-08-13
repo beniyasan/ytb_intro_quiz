@@ -24,59 +24,73 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [answeredParticipants, setAnsweredParticipants] = useState<string[]>([]);
 
+  const onSessionJoined = useCallback(({ session, participantId: pid }: { session: QuizSession; participantId: string }) => {
+    console.log('Session joined successfully');
+    setCurrentSession(session);
+    setParticipantId(pid);
+    setIsJoined(true);
+    setError(null);
+  }, []);
+
+  const onParticipantJoined = useCallback((participant: Participant) => {
+    console.log('New participant joined:', participant.username);
+    if (currentSession) {
+      setCurrentSession(prev => prev ? {
+        ...prev,
+        participants: [...prev.participants, participant]
+      } : null);
+    }
+  }, [currentSession]);
+
+  const onParticipantLeft = useCallback(({ participantId: leftParticipantId }: { participantId: string }) => {
+    console.log('Participant left:', leftParticipantId);
+    if (currentSession) {
+      setCurrentSession(prev => prev ? {
+        ...prev,
+        participants: prev.participants.filter(p => p.id !== leftParticipantId)
+      } : null);
+    }
+    setAnsweredParticipants(prev => prev.filter(id => id !== leftParticipantId));
+  }, [currentSession]);
+
+  const onQuestionStarted = useCallback(({ question, questionNumber: qNum }: { question: Question; questionNumber: number }) => {
+    console.log('Question started:', question.text);
+    setCurrentQuestion(question);
+    setQuestionNumber(qNum);
+    setHasAnswered(false);
+    setResults([]);
+    setAnsweredParticipants([]);
+  }, []);
+
+  const onAnswerReceived = useCallback(({ participantId: answeredParticipantId, username: answeredUsername }: { participantId: string; username: string }) => {
+    console.log(`Answer received from: ${answeredUsername}`);
+    setAnsweredParticipants(prev => [...prev, answeredParticipantId]);
+  }, []);
+
+  const onQuestionResults = useCallback((questionResults: QuizResult[]) => {
+    console.log('Question results received:', questionResults);
+    setResults(questionResults);
+    setCurrentQuestion(null); // Hide question when results are shown
+  }, []);
+
+  const onError = useCallback(({ message }: { message: string }) => {
+    console.error('WebSocket error:', message);
+    setError(message);
+  }, []);
+
   const {
     socket,
     isConnected,
     joinSession,
     submitAnswer,
   } = useWebSocket({
-    onSessionJoined: ({ session, participantId: pid }) => {
-      console.log('Session joined successfully');
-      setCurrentSession(session);
-      setParticipantId(pid);
-      setIsJoined(true);
-      setError(null);
-    },
-    onParticipantJoined: (participant) => {
-      console.log('New participant joined:', participant.username);
-      if (currentSession) {
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          participants: [...prev.participants, participant]
-        } : null);
-      }
-    },
-    onParticipantLeft: ({ participantId: leftParticipantId }) => {
-      console.log('Participant left:', leftParticipantId);
-      if (currentSession) {
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          participants: prev.participants.filter(p => p.id !== leftParticipantId)
-        } : null);
-      }
-      setAnsweredParticipants(prev => prev.filter(id => id !== leftParticipantId));
-    },
-    onQuestionStarted: ({ question, questionNumber: qNum }) => {
-      console.log('Question started:', question.text);
-      setCurrentQuestion(question);
-      setQuestionNumber(qNum);
-      setHasAnswered(false);
-      setResults([]);
-      setAnsweredParticipants([]);
-    },
-    onAnswerReceived: ({ participantId: answeredParticipantId, username: answeredUsername }) => {
-      console.log(`Answer received from: ${answeredUsername}`);
-      setAnsweredParticipants(prev => [...prev, answeredParticipantId]);
-    },
-    onQuestionResults: (questionResults) => {
-      console.log('Question results received:', questionResults);
-      setResults(questionResults);
-      setCurrentQuestion(null); // Hide question when results are shown
-    },
-    onError: ({ message }) => {
-      console.error('WebSocket error:', message);
-      setError(message);
-    },
+    onSessionJoined,
+    onParticipantJoined,
+    onParticipantLeft,
+    onQuestionStarted,
+    onAnswerReceived,
+    onQuestionResults,
+    onError,
   });
 
   const handleJoinSession = useCallback((e: React.FormEvent) => {

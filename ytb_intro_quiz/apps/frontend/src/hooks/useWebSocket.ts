@@ -170,16 +170,7 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
       socketInstance.removeAllListeners();
       socketInstance.disconnect();
     };
-  }, [
-    onSessionJoined,
-    onParticipantJoined,
-    onParticipantLeft,
-    onQuestionStarted,
-    onAnswerReceived,
-    onQuestionResults,
-    onSessionEnded,
-    onError,
-  ]);
+  }, []); // Empty dependency array to prevent re-initialization
 
   const joinSession = useCallback((sessionId: string, username: string) => {
     if (socketRef.current) {

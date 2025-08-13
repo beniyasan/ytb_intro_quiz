@@ -21,6 +21,42 @@ export default function HostPage() {
   const [error, setError] = useState<string | null>(null);
   const [answeredCount, setAnsweredCount] = useState(0);
 
+  const onParticipantJoined = useCallback((participant: Participant) => {
+    console.log('New participant joined:', participant.username);
+    if (currentSession) {
+      setCurrentSession(prev => prev ? {
+        ...prev,
+        participants: [...prev.participants, participant]
+      } : null);
+    }
+  }, [currentSession]);
+
+  const onParticipantLeft = useCallback(({ participantId }: { participantId: string }) => {
+    console.log('Participant left:', participantId);
+    if (currentSession) {
+      setCurrentSession(prev => prev ? {
+        ...prev,
+        participants: prev.participants.filter(p => p.id !== participantId)
+      } : null);
+    }
+  }, [currentSession]);
+
+  const onAnswerReceived = useCallback(({ participantId, username }: { participantId: string; username: string }) => {
+    console.log(`Answer received from: ${username}`);
+    setAnsweredCount(prev => prev + 1);
+  }, []);
+
+  const onQuestionResults = useCallback((questionResults: QuizResult[]) => {
+    console.log('Question results received:', questionResults);
+    setResults(questionResults);
+    setIsQuestionActive(false);
+  }, []);
+
+  const onError = useCallback(({ message }: { message: string }) => {
+    console.error('WebSocket error:', message);
+    setError(message);
+  }, []);
+
   const {
     socket,
     isConnected,
@@ -29,37 +65,11 @@ export default function HostPage() {
     endQuestion,
     getSampleQuestions,
   } = useWebSocket({
-    onParticipantJoined: (participant) => {
-      console.log('New participant joined:', participant.username);
-      if (currentSession) {
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          participants: [...prev.participants, participant]
-        } : null);
-      }
-    },
-    onParticipantLeft: ({ participantId }) => {
-      console.log('Participant left:', participantId);
-      if (currentSession) {
-        setCurrentSession(prev => prev ? {
-          ...prev,
-          participants: prev.participants.filter(p => p.id !== participantId)
-        } : null);
-      }
-    },
-    onAnswerReceived: ({ participantId, username }) => {
-      console.log(`Answer received from: ${username}`);
-      setAnsweredCount(prev => prev + 1);
-    },
-    onQuestionResults: (questionResults) => {
-      console.log('Question results received:', questionResults);
-      setResults(questionResults);
-      setIsQuestionActive(false);
-    },
-    onError: ({ message }) => {
-      console.error('WebSocket error:', message);
-      setError(message);
-    },
+    onParticipantJoined,
+    onParticipantLeft,
+    onAnswerReceived,
+    onQuestionResults,
+    onError,
   });
 
   // Get sample questions on component mount
@@ -85,7 +95,7 @@ export default function HostPage() {
         socket.off('session-created');
       };
     }
-  }, [isConnected, socket, getSampleQuestions]);
+  }, [isConnected, socket]);
 
   const handleCreateSession = useCallback(() => {
     if (!sessionTitle.trim()) {
