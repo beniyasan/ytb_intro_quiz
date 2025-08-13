@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ytb_quiz_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ytb_quiz_db
+      POSTGRES_USER: ytb_quiz_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ytb_quiz_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - ytb_quiz_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ytb_quiz_user -d ytb_quiz_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ytb_quiz_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - ytb_quiz_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ytb_quiz_network:
+    driver: bridge
