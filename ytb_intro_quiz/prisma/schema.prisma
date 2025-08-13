@@ -1,0 +1,176 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique @db.VarChar(255)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  quizzes        Quiz[]
+  quizAttempts   QuizAttempt[]
+  refreshTokens  RefreshToken[]
+  passwordHistory PasswordHistory[]
+  sessions       Session[]
+
+  @@map("users")
+}
+
+// Videos table
+model Video {
+  id           String   @id @default(uuid()) @db.Uuid
+  youtubeId    String   @unique @map("youtube_id") @db.VarChar(50)
+  title        String   @db.VarChar(500)
+  channelName  String?  @map("channel_name") @db.VarChar(255)
+  thumbnailUrl String?  @map("thumbnail_url") @db.Text
+  duration     Int?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  quizzes Quiz[]
+
+  @@map("videos")
+}
+
+// Quizzes table
+model Quiz {
+  id          String   @id @default(uuid()) @db.Uuid
+  videoId     String   @map("video_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  title       String   @db.VarChar(500)
+  description String?  @db.Text
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  video        Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  questions    Question[]
+  quizAttempts QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+// Questions table
+model Question {
+  id           String      @id @default(uuid()) @db.Uuid
+  quizId       String      @map("quiz_id") @db.Uuid
+  questionText String      @map("question_text") @db.Text
+  questionType QuestionType @map("question_type")
+  correctAnswer String?    @map("correct_answer") @db.Text
+  options      Json?       @db.JsonB
+  explanation  String?     @db.Text
+  orderIndex   Int         @map("order_index")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@map("questions")
+}
+
+// Quiz attempts table
+model QuizAttempt {
+  id          String    @id @default(uuid()) @db.Uuid
+  quizId      String    @map("quiz_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  score       Decimal?  @db.Decimal(5, 2)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
+
+  // Relations
+  quiz Quiz  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("quiz_attempts")
+}
+
+// JWT Refresh Tokens table (for security)
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(500)
+  sessionId String   @map("session_id") @db.VarChar(64)
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// Password history for security policy
+model PasswordHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_history")
+}
+
+// Sessions table for session management
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  sessionId String    @unique @map("session_id") @db.VarChar(64)
+  isActive  Boolean   @default(true) @map("is_active")
+  lastUsed  DateTime  @default(now()) @map("last_used") @db.Timestamptz
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  ipAddress String?   @map("ip_address") @db.Inet
+  userAgent String?   @map("user_agent") @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Audit log for security monitoring
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  action       String   @db.VarChar(100)
+  resource     String   @db.VarChar(100)
+  result       AuditResult
+  metadata     Json?    @db.JsonB
+  ipAddress    String?  @map("ip_address") @db.Inet
+  userAgent    String?  @map("user_agent") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("audit_logs")
+}
+
+// Enums
+enum QuestionType {
+  multiple_choice
+  true_false
+  open_ended
+}
+
+enum AuditResult {
+  success
+  failure
+}

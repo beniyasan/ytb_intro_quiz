@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Authentication System - Frontend Integration</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="overlay hidden">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <!-- Navigation Bar -->
+        <nav class="navbar" id="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>JWT Auth System</span>
+                </div>
+                <div class="nav-menu" id="navMenu">
+                    <div class="nav-item" id="navHome">
+                        <a href="#home" class="nav-link">Home</a>
+                    </div>
+                    <div class="nav-item" id="navLogin">
+                        <a href="#login" class="nav-link">Login</a>
+                    </div>
+                    <div class="nav-item" id="navRegister">
+                        <a href="#register" class="nav-link">Register</a>
+                    </div>
+                    <div class="nav-item hidden" id="navDashboard">
+                        <a href="#dashboard" class="nav-link">Dashboard</a>
+                    </div>
+                    <div class="nav-item hidden" id="navProfile">
+                        <a href="#profile" class="nav-link">Profile</a>
+                    </div>
+                    <div class="nav-item hidden" id="navLogout">
+                        <a href="#logout" class="nav-link">Logout</a>
+                    </div>
+                </div>
+                <div class="nav-toggle" id="navToggle">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Home Page -->
+            <section id="homePage" class="page active">
+                <div class="container">
+                    <div class="hero">
+                        <h1 class="hero-title">
+                            <i class="fas fa-lock"></i>
+                            JWT Authentication System
+                        </h1>
+                        <p class="hero-subtitle">
+                            Secure, modern authentication with JSON Web Tokens
+                        </p>
+                        <div class="hero-buttons">
+                            <button class="btn btn-primary" onclick="showPage('login')">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </button>
+                            <button class="btn btn-secondary" onclick="showPage('register')">
+                                <i class="fas fa-user-plus"></i> Register
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="features">
+                        <h2>Security Features</h2>
+                        <div class="feature-grid">
+                            <div class="feature-card">
+                                <i class="fas fa-key feature-icon"></i>
+                                <h3>JWT Tokens</h3>
+                                <p>Secure authentication with access and refresh tokens</p>
+                            </div>
+                            <div class="feature-card">
+                                <i class="fas fa-shield-alt feature-icon"></i>
+                                <h3>Protected Routes</h3>
+                                <p>Access control for authenticated users only</p>
+                            </div>
+                            <div class="feature-card">
+                                <i class="fas fa-sync-alt feature-icon"></i>
+                                <h3>Token Refresh</h3>
+                                <p>Automatic token renewal for seamless experience</p>
+                            </div>
+                            <div class="feature-card">
+                                <i class="fas fa-user-shield feature-icon"></i>
+                                <h3>User Management</h3>
+                                <p>Complete user profile and password management</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Login Page -->
+            <section id="loginPage" class="page">
+                <div class="container">
+                    <div class="auth-container">
+                        <div class="auth-header">
+                            <h2><i class="fas fa-sign-in-alt"></i> Login</h2>
+                            <p>Sign in to your account</p>
+                        </div>
+                        
+                        <form id="loginForm" class="auth-form" novalidate>
+                            <div class="form-group">
+                                <label for="loginEmail">Email Address</label>
+                                <div class="input-group">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    <input type="email" id="loginEmail" name="email" required 
+                                           placeholder="Enter your email" autocomplete="email">
+                                </div>
+                                <div class="form-error" id="loginEmailError"></div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="loginPassword">Password</label>
+                                <div class="input-group">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="loginPassword" name="password" required 
+                                           placeholder="Enter your password" autocomplete="current-password">
+                                    <button type="button" class="password-toggle" onclick="togglePassword('loginPassword')">
+                                        <i class="fas fa-eye" id="loginPasswordEye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-error" id="loginPasswordError"></div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="rememberMe" name="rememberMe">
+                                    <span class="checkmark"></span>
+                                    Remember me
+                                </label>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+                                <span class="btn-text">Sign In</span>
+                                <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                            </button>
+                        </form>
+                        
+                        <div class="auth-footer">
+                            <p>Don't have an account? 
+                                <a href="#register" onclick="showPage('register')" class="auth-link">Register here</a>
+                            </p>
+                        </div>
+                        
+                        <div class="alert hidden" id="loginAlert"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Register Page -->
+            <section id="registerPage" class="page">
+                <div class="container">
+                    <div class="auth-container">
+                        <div class="auth-header">
+                            <h2><i class="fas fa-user-plus"></i> Register</h2>
+                            <p>Create your new account</p>
+                        </div>
+                        
+                        <form id="registerForm" class="auth-form" novalidate>
+                            <div class="form-group">
+                                <label for="registerUsername">Username</label>
+                                <div class="input-group">
+                                    <i class="fas fa-user input-icon"></i>
+                                    <input type="text" id="registerUsername" name="username" required 
+                                           placeholder="Enter your username" autocomplete="username">
+                                </div>
+                                <div class="form-error" id="registerUsernameError"></div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="registerEmail">Email Address</label>
+                                <div class="input-group">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    <input type="email" id="registerEmail" name="email" required 
+                                           placeholder="Enter your email" autocomplete="email">
+                                </div>
+                                <div class="form-error" id="registerEmailError"></div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="registerPassword">Password</label>
+                                <div class="input-group">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="registerPassword" name="password" required 
+                                           placeholder="Enter your password" autocomplete="new-password">
+                                    <button type="button" class="password-toggle" onclick="togglePassword('registerPassword')">
+                                        <i class="fas fa-eye" id="registerPasswordEye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-error" id="registerPasswordError"></div>
+                                <div class="password-strength" id="passwordStrength">
+                                    <div class="strength-bar">
+                                        <div class="strength-fill" id="strengthFill"></div>
+                                    </div>
+                                    <div class="strength-text" id="strengthText">Password strength</div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="confirmPassword">Confirm Password</label>
+                                <div class="input-group">
+                                    <i class="fas fa-lock input-icon"></i>
+                                    <input type="password" id="confirmPassword" name="confirmPassword" required 
+                                           placeholder="Confirm your password" autocomplete="new-password">
+                                    <button type="button" class="password-toggle" onclick="togglePassword('confirmPassword')">
+                                        <i class="fas fa-eye" id="confirmPasswordEye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-error" id="confirmPasswordError"></div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-full" id="registerBtn">
+                                <span class="btn-text">Create Account</span>
+                                <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                            </button>
+                        </form>
+                        
+                        <div class="auth-footer">
+                            <p>Already have an account? 
+                                <a href="#login" onclick="showPage('login')" class="auth-link">Sign in here</a>
+                            </p>
+                        </div>
+                        
+                        <div class="alert hidden" id="registerAlert"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Dashboard Page -->
+            <section id="dashboardPage" class="page">
+                <div class="container">
+                    <div class="dashboard-header">
+                        <h2><i class="fas fa-tachometer-alt"></i> User Dashboard</h2>
+                        <p>Welcome back! Manage your account and view your information.</p>
+                    </div>
+                    
+                    <div class="dashboard-grid">
+                        <!-- User Info Card -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-user"></i> User Information</h3>
+                            </div>
+                            <div class="card-content" id="userInfo">
+                                <!-- User info will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Token Info Card -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-key"></i> Token Information</h3>
+                            </div>
+                            <div class="card-content" id="tokenInfo">
+                                <!-- Token info will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Actions Card -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" onclick="showPage('profile')">
+                                        <i class="fas fa-user-edit"></i> Edit Profile
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="refreshTokenManual()">
+                                        <i class="fas fa-sync-alt"></i> Refresh Token
+                                    </button>
+                                    <button class="btn btn-danger" onclick="logoutUser()">
+                                        <i class="fas fa-sign-out-alt"></i> Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Security Status Card -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-shield-alt"></i> Security Status</h3>
+                            </div>
+                            <div class="card-content" id="securityStatus">
+                                <!-- Security status will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Profile Page -->
+            <section id="profilePage" class="page">
+                <div class="container">
+                    <div class="profile-header">
+                        <h2><i class="fas fa-user-edit"></i> Profile Management</h2>
+                        <p>Update your profile information and security settings</p>
+                    </div>
+                    
+                    <div class="profile-tabs">
+                        <button class="tab-btn active" onclick="showProfileTab('info')">
+                            <i class="fas fa-user"></i> Profile Info
+                        </button>
+                        <button class="tab-btn" onclick="showProfileTab('security')">
+                            <i class="fas fa-shield-alt"></i> Security
+                        </button>
+                    </div>
+                    
+                    <!-- Profile Info Tab -->
+                    <div id="profileInfoTab" class="tab-content active">
+                        <div class="profile-card">
+                            <form id="profileForm" class="profile-form" novalidate>
+                                <div class="form-group">
+                                    <label for="profileUsername">Username</label>
+                                    <div class="input-group">
+                                        <i class="fas fa-user input-icon"></i>
+                                        <input type="text" id="profileUsername" name="username" 
+                                               placeholder="Enter your username">
+                                    </div>
+                                    <div class="form-error" id="profileUsernameError"></div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="profileEmail">Email Address</label>
+                                    <div class="input-group">
+                                        <i class="fas fa-envelope input-icon"></i>
+                                        <input type="email" id="profileEmail" name="email" 
+                                               placeholder="Enter your email">
+                                    </div>
+                                    <div class="form-error" id="profileEmailError"></div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" id="updateProfileBtn">
+                                    <span class="btn-text"><i class="fas fa-save"></i> Update Profile</span>
+                                    <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Tab -->
+                    <div id="profileSecurityTab" class="tab-content">
+                        <div class="profile-card">
+                            <form id="passwordForm" class="profile-form" novalidate>
+                                <div class="form-group">
+                                    <label for="currentPassword">Current Password</label>
+                                    <div class="input-group">
+                                        <i class="fas fa-lock input-icon"></i>
+                                        <input type="password" id="currentPassword" name="currentPassword" 
+                                               placeholder="Enter current password" autocomplete="current-password">
+                                        <button type="button" class="password-toggle" onclick="togglePassword('currentPassword')">
+                                            <i class="fas fa-eye" id="currentPasswordEye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-error" id="currentPasswordError"></div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="newPassword">New Password</label>
+                                    <div class="input-group">
+                                        <i class="fas fa-key input-icon"></i>
+                                        <input type="password" id="newPassword" name="newPassword" 
+                                               placeholder="Enter new password" autocomplete="new-password">
+                                        <button type="button" class="password-toggle" onclick="togglePassword('newPassword')">
+                                            <i class="fas fa-eye" id="newPasswordEye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-error" id="newPasswordError"></div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="confirmNewPassword">Confirm New Password</label>
+                                    <div class="input-group">
+                                        <i class="fas fa-key input-icon"></i>
+                                        <input type="password" id="confirmNewPassword" name="confirmNewPassword" 
+                                               placeholder="Confirm new password" autocomplete="new-password">
+                                        <button type="button" class="password-toggle" onclick="togglePassword('confirmNewPassword')">
+                                            <i class="fas fa-eye" id="confirmNewPasswordEye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-error" id="confirmNewPasswordError"></div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" id="changePasswordBtn">
+                                    <span class="btn-text"><i class="fas fa-key"></i> Change Password</span>
+                                    <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toastContainer" class="toast-container"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/validation.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
