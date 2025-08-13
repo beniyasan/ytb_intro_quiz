@@ -412,7 +412,7 @@ export class AuthService {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
       };
-    } catch (error) {
+    } catch (error: any) {
       await this.logAuditEvent({
         userId,
         action: 'update_profile',
@@ -516,7 +516,7 @@ export class AuthService {
         action: 'change_password',
         resource: 'user',
         result: 'failure',
-        metadata: { error: error.message },
+        metadata: { error: (error as Error).message },
         ...metadata
       });
 

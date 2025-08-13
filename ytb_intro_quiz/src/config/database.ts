@@ -2,20 +2,15 @@ import { PrismaClient } from '@prisma/client';
 import { appConfig, isDevelopment, isTest } from './app';
 import { logger } from '../utils/logger';
 
-// Prisma client configuration
-const prismaConfig = {
+// Create Prisma client instance
+export const prisma = new PrismaClient({
   datasources: {
     db: {
       url: appConfig.database.url
     }
   },
-  log: isDevelopment() 
-    ? ['query', 'info', 'warn', 'error'] as const
-    : ['warn', 'error'] as const
-};
-
-// Create Prisma client instance
-export const prisma = new PrismaClient(prismaConfig);
+  log: isDevelopment() ? ['warn', 'error'] : ['error']
+});
 
 // Database connection management
 export class DatabaseManager {
@@ -73,7 +68,7 @@ export class DatabaseManager {
 
   // Transaction helper
   async executeTransaction<T>(
-    callback: (tx: Parameters<typeof prisma.$transaction>[0]) => Promise<T>
+    callback: (tx: any) => Promise<T>
   ): Promise<T> {
     return prisma.$transaction(callback);
   }
@@ -124,7 +119,7 @@ process.on('SIGTERM', async () => {
 export { Prisma } from '@prisma/client';
 
 // Custom error handling for Prisma errors
-export function isPrismaError(error: any): error is import('@prisma/client').PrismaClientKnownRequestError {
+export function isPrismaError(error: any): boolean {
   return error && error.code && error.code.startsWith('P');
 }
 
@@ -147,5 +142,5 @@ export function handlePrismaError(error: any): Error {
 }
 
 // Export connection functions
-export const connectDatabase = () => database.connect();
-export const disconnectDatabase = () => database.disconnect();
+export const connectDatabase = () => dbManager.connect();
+export const disconnectDatabase = () => dbManager.disconnect();
