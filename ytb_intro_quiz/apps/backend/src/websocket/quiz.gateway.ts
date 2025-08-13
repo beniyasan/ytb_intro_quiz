@@ -25,6 +25,7 @@ import {
     credentials: true,
   },
   namespace: '/quiz',
+  allowEIO3: true, // Enable Engine.IO v3 compatibility
 })
 export class QuizGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -37,23 +38,31 @@ export class QuizGateway
   constructor(private readonly quizService: QuizService) {}
 
   afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
+    this.logger.log('WebSocket Gateway initialized for /quiz namespace');
+    this.logger.log(`CORS origin set to: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
   }
 
   handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
+    this.logger.log(`🔗 Client connected to /quiz namespace: ${client.id}`);
+    this.logger.log(`📍 Client info: ${client.handshake.address} via ${client.conn.transport.name}`);
+    this.logger.log(`🌐 Headers: ${JSON.stringify(client.handshake.headers['user-agent']?.substring(0, 50))}...`);
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
+    this.logger.log(`❌ Client disconnected from /quiz namespace: ${client.id}`);
     
-    // Handle participant leaving
-    const result = this.quizService.leaveSession(client.id);
-    if (result) {
-      // Notify other participants
-      client.to(result.sessionId).emit('participant-left', {
-        participantId: result.participant.id,
-      });
+    try {
+      // Handle participant leaving
+      const result = this.quizService.leaveSession(client.id);
+      if (result) {
+        // Notify other participants
+        client.to(result.sessionId).emit('participant-left', {
+          participantId: result.participant.id,
+        });
+        this.logger.log(`👋 Participant left session ${result.sessionId}: ${result.participant.username}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error handling disconnect for ${client.id}:`, error);
     }
   }
 
@@ -63,38 +72,50 @@ export class QuizGateway
     @MessageBody() data: WebSocketEvents['join-session'],
   ) {
     try {
+      this.logger.log(`🚪 Join session request from ${client.id}: ${JSON.stringify(data)}`);
+      
       const { sessionId, username } = data;
       
+      if (!username || username.trim().length === 0) {
+        this.logger.warn(`❌ Join session failed - invalid username: "${username}"`);
+        client.emit('error', { message: 'ユーザー名が無効です' });
+        return;
+      }
+
       // Get or create session
       let session = this.quizService.getSession(sessionId);
       if (!session) {
         // Create a new session if it doesn't exist
+        this.logger.log(`📝 Creating new session for: ${sessionId}`);
         session = this.quizService.createSession('Live Quiz Session');
       }
 
       // Join the participant to the session
-      const participant = this.quizService.joinSession(sessionId, username, client.id);
+      const participant = this.quizService.joinSession(session.id, username.trim(), client.id);
       if (!participant) {
-        client.emit('error', { message: 'Failed to join session' });
+        this.logger.error(`❌ Failed to join session ${session.id} for user ${username}`);
+        client.emit('error', { message: 'セッションへの参加に失敗しました' });
         return;
       }
 
       // Join the socket room
-      await client.join(sessionId);
+      await client.join(session.id);
+      this.logger.log(`🏠 Client ${client.id} joined room ${session.id}`);
 
       // Send session info to the client
+      const updatedSession = this.quizService.getSession(session.id)!;
       client.emit('session-joined', {
-        session: this.quizService.getSession(sessionId)!,
+        session: updatedSession,
         participantId: participant.id,
       });
 
       // Notify other participants
-      client.to(sessionId).emit('participant-joined', participant);
+      client.to(session.id).emit('participant-joined', participant);
 
-      this.logger.log(`${username} joined session ${sessionId}`);
+      this.logger.log(`✅ ${username} successfully joined session ${session.id} (${updatedSession.participants.length} total participants)`);
     } catch (error) {
-      this.logger.error(`Error joining session: ${error.message}`);
-      client.emit('error', { message: 'Failed to join session' });
+      this.logger.error(`💥 Error joining session:`, error);
+      client.emit('error', { message: 'セッション参加中にエラーが発生しました' });
     }
   }
 

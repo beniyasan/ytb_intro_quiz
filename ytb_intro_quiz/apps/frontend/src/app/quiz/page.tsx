@@ -160,9 +160,20 @@ export default function QuizPage() {
             </button>
           </form>
 
-          <p className="text-sm text-gray-500 text-center mt-4">
-            接続状態: {isConnected ? '✅ 接続済み' : '🔄 接続中...'}
-          </p>
+          <div className="text-center mt-4">
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+              isConnected 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {isConnected ? '✅ 接続済み' : '🔄 接続中...'}
+            </div>
+            {!isConnected && (
+              <p className="text-xs text-gray-500 mt-2">
+                サーバーへの接続を確立しています。少々お待ちください。
+              </p>
+            )}
+          </div>
         </div>
       </div>
     );

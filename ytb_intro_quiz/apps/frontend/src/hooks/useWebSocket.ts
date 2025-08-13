@@ -54,24 +54,57 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
 
   useEffect(() => {
     // Initialize socket connection
-    const socketInstance = io(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/quiz`, {
-      transports: ['websocket', 'polling'],
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    console.log('Connecting to WebSocket server:', `${backendUrl}/quiz`);
+    
+    const socketInstance = io(`${backendUrl}/quiz`, {
+      transports: ['polling', 'websocket'], // polling first for debugging
       autoConnect: true,
+      forceNew: true,
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
     });
 
     // Connection event handlers
     socketInstance.on('connect', () => {
-      console.log('Connected to WebSocket server');
+      console.log('✅ Successfully connected to WebSocket server');
+      console.log('Socket ID:', socketInstance.id);
+      console.log('Transport:', socketInstance.io.engine.transport.name);
       setIsConnected(true);
     });
 
-    socketInstance.on('disconnect', () => {
-      console.log('Disconnected from WebSocket server');
+    socketInstance.on('disconnect', (reason) => {
+      console.log('❌ Disconnected from WebSocket server. Reason:', reason);
       setIsConnected(false);
     });
 
-    socketInstance.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+    socketInstance.on('connect_error', (error: any) => {
+      console.error('🚨 WebSocket connection error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        description: error.description || 'No description',
+        type: error.type || 'Unknown',
+      });
+      setIsConnected(false);
+    });
+
+    socketInstance.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Reconnected to WebSocket server after', attemptNumber, 'attempts');
+      setIsConnected(true);
+    });
+
+    socketInstance.on('reconnect_attempt', (attemptNumber) => {
+      console.log('🔄 Attempting to reconnect... Attempt', attemptNumber);
+    });
+
+    socketInstance.on('reconnect_error', (error) => {
+      console.error('🚨 Reconnection failed:', error);
+    });
+
+    socketInstance.on('reconnect_failed', () => {
+      console.error('💀 Failed to reconnect to WebSocket server');
       setIsConnected(false);
     });
 
