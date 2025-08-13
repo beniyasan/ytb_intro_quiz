@@ -15,6 +15,7 @@ export class QuizService {
   private participantSessions: Map<string, string> = new Map(); // socketId -> sessionId
   private answers: Map<string, QuizAnswer[]> = new Map(); // sessionId -> answers
   private currentQuestions: Map<string, Question> = new Map(); // sessionId -> current question
+  private questionStartTimes: Map<string, number> = new Map(); // sessionId -> question start timestamp
 
   // Sample questions for testing
   private readonly sampleQuestions: Question[] = [
@@ -118,6 +119,7 @@ export class QuizService {
       this.sessions.delete(sessionId);
       this.answers.delete(sessionId);
       this.currentQuestions.delete(sessionId);
+      this.questionStartTimes.delete(sessionId);
       this.logger.log(`Cleaned up empty session: ${sessionId}`);
     }
 
@@ -135,8 +137,12 @@ export class QuizService {
     session.currentQuestion = questionIndex;
     session.isActive = true;
     
+    // Record question start time for accurate response time calculation
+    const startTime = Date.now();
+    this.questionStartTimes.set(sessionId, startTime);
+    
     this.currentQuestions.set(sessionId, question);
-    this.logger.log(`Started question ${questionIndex} in session ${sessionId}`);
+    this.logger.log(`Started question ${questionIndex} in session ${sessionId} at ${startTime}`);
 
     return question;
   }
@@ -178,15 +184,21 @@ export class QuizService {
     }
 
     const questionAnswers = answers.filter(a => a.questionId === questionId);
+    const questionStartTime = this.questionStartTimes.get(sessionId);
     
-    // Calculate response times and sort by timestamp
+    // Calculate actual response times and sort by response speed
     const sortedAnswers = questionAnswers
       .map(answer => {
         const participant = session.participants.find(p => p.id === answer.participantId);
         const isCorrect = answer.answer === question.correctAnswer;
         
-        // Simple response time calculation (could be improved with question start time)
-        const responseTime = 1000; // Placeholder - in real implementation, calculate from question start time
+        // Calculate actual response time from question start to answer submission
+        let responseTime = 1000; // Default fallback
+        if (questionStartTime && answer.timestamp) {
+          responseTime = Math.max(answer.timestamp - questionStartTime, 0);
+        }
+        
+        this.logger.log(`Response time for ${participant?.username}: ${responseTime}ms (start: ${questionStartTime}, answer: ${answer.timestamp})`);
         
         return {
           participantId: answer.participantId,
