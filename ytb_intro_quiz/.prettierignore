@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.lock
+*.log
+.git/
+.gitignore
+README.md
+CHANGELOG.md
