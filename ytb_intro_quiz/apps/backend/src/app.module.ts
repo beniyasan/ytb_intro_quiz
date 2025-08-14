@@ -11,7 +11,7 @@ import { YoutubeModule } from './youtube/youtube.module';
       isGlobal: true,
     }),
     QuizModule,
-    YoutubeModule,
+    // YoutubeModule, // Temporarily disabled for debugging
   ],
   controllers: [AppController],
   providers: [AppService],
