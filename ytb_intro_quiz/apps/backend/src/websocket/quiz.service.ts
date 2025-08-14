@@ -6,6 +6,9 @@ import {
   QuizAnswer,
   QuizResult,
   Question,
+  RankingEntry,
+  SessionStatistics,
+  ParticipantStatistics,
 } from '@ytb-quiz/shared';
 
 @Injectable()
@@ -16,6 +19,9 @@ export class QuizService {
   private answers: Map<string, QuizAnswer[]> = new Map(); // sessionId -> answers
   private currentQuestions: Map<string, Question> = new Map(); // sessionId -> current question
   private questionStartTimes: Map<string, number> = new Map(); // sessionId -> question start timestamp
+  private participantResponseTimes: Map<string, number[]> = new Map(); // participantId -> response times array
+  private participantCorrectAnswers: Map<string, number> = new Map(); // participantId -> correct answer count
+  private participantTotalQuestions: Map<string, number> = new Map(); // participantId -> total questions answered
 
   // Sample questions for testing
   private readonly sampleQuestions: Question[] = [
@@ -50,6 +56,8 @@ export class QuizService {
       isActive: false,
       currentQuestion: 0,
       participants: [],
+      youtubeQuizzes: [],
+      useYoutubeQuiz: false,
       createdAt: new Date(),
     };
 
@@ -84,6 +92,7 @@ export class QuizService {
       username,
       socketId,
       score: 0,
+      streak: 0,
       joinedAt: new Date(),
     };
 
@@ -120,6 +129,14 @@ export class QuizService {
       this.answers.delete(sessionId);
       this.currentQuestions.delete(sessionId);
       this.questionStartTimes.delete(sessionId);
+      
+      // Clean up participant tracking data
+      session.participants.forEach(p => {
+        this.participantResponseTimes.delete(p.id);
+        this.participantCorrectAnswers.delete(p.id);
+        this.participantTotalQuestions.delete(p.id);
+      });
+      
       this.logger.log(`Cleaned up empty session: ${sessionId}`);
     }
 
@@ -186,7 +203,7 @@ export class QuizService {
     const questionAnswers = answers.filter(a => a.questionId === questionId);
     const questionStartTime = this.questionStartTimes.get(sessionId);
     
-    // Calculate actual response times and sort by response speed
+    // Calculate actual response times and sort by response speed for correct answers
     const sortedAnswers = questionAnswers
       .map(answer => {
         const participant = session.participants.find(p => p.id === answer.participantId);
@@ -198,6 +215,9 @@ export class QuizService {
           responseTime = Math.max(answer.timestamp - questionStartTime, 0);
         }
         
+        // Update participant statistics
+        this.updateParticipantStats(answer.participantId, responseTime, isCorrect);
+        
         this.logger.log(`Response time for ${participant?.username}: ${responseTime}ms (start: ${questionStartTime}, answer: ${answer.timestamp})`);
         
         return {
@@ -207,23 +227,47 @@ export class QuizService {
           isCorrect,
           responseTime,
           rank: 0, // Will be set below
+          score: 0, // Will be calculated below
         };
       })
-      .sort((a, b) => a.responseTime - b.responseTime);
+      .sort((a, b) => {
+        // Sort correct answers by response time, incorrect answers last
+        if (a.isCorrect && b.isCorrect) {
+          return a.responseTime - b.responseTime;
+        } else if (a.isCorrect && !b.isCorrect) {
+          return -1;
+        } else if (!a.isCorrect && b.isCorrect) {
+          return 1;
+        } else {
+          return a.responseTime - b.responseTime;
+        }
+      });
 
-    // Assign ranks
+    // Assign ranks and calculate advanced scores
     let currentRank = 1;
-    sortedAnswers.forEach((result, index) => {
+    sortedAnswers.forEach((result) => {
       if (result.isCorrect) {
         result.rank = currentRank++;
         
-        // Update participant score
+        // Calculate advanced score with bonuses
         const participant = session.participants.find(p => p.id === result.participantId);
         if (participant) {
-          participant.score += Math.max(0, 100 - (result.rank - 1) * 10);
+          const questionScore = this.calculateAdvancedScore(result, participant);
+          result.score = questionScore;
+          
+          // Update participant total score and streak
+          participant.score += questionScore;
+          participant.streak += 1;
         }
       } else {
         result.rank = -1; // Incorrect answer
+        result.score = 0;
+        
+        // Reset streak for incorrect answer
+        const participant = session.participants.find(p => p.id === result.participantId);
+        if (participant) {
+          participant.streak = 0;
+        }
       }
     });
 
@@ -246,6 +290,167 @@ export class QuizService {
     return Array.from(this.sessions.values());
   }
 
+  // Advanced scoring calculation
+  private calculateAdvancedScore(result: QuizResult, participant: Participant): number {
+    const BASE_POINTS = 100;
+    const SPEED_BONUS_MAX = 50;
+    const RANK_BONUS_MAX = 30;
+    const STREAK_BONUS = 10;
+    
+    // Base points for correct answer
+    let score = BASE_POINTS;
+    
+    // Speed bonus: faster responses get more points (max 50 points)
+    // Assuming 10 seconds max response time for full speed bonus
+    const maxResponseTime = 10000; // 10 seconds in milliseconds
+    const speedBonus = Math.max(0, SPEED_BONUS_MAX * (1 - Math.min(result.responseTime, maxResponseTime) / maxResponseTime));
+    score += Math.floor(speedBonus);
+    
+    // Rank bonus: 1st place gets 30, 2nd gets 20, 3rd gets 10, others get 0
+    const rankBonus = Math.max(0, RANK_BONUS_MAX - (result.rank - 1) * 10);
+    score += rankBonus;
+    
+    // Streak bonus: additional points for consecutive correct answers
+    const streakBonus = Math.min(participant.streak, 5) * STREAK_BONUS; // Max 5 streak bonus
+    score += streakBonus;
+    
+    this.logger.log(`Score calculation for ${result.username}: base=${BASE_POINTS}, speed=${Math.floor(speedBonus)}, rank=${rankBonus}, streak=${streakBonus}, total=${score}`);
+    
+    return score;
+  }
+  
+  // Update participant statistics
+  private updateParticipantStats(participantId: string, responseTime: number, isCorrect: boolean): void {
+    // Update response times
+    const responseTimes = this.participantResponseTimes.get(participantId) || [];
+    responseTimes.push(responseTime);
+    this.participantResponseTimes.set(participantId, responseTimes);
+    
+    // Update correct answers count
+    if (isCorrect) {
+      const correctCount = this.participantCorrectAnswers.get(participantId) || 0;
+      this.participantCorrectAnswers.set(participantId, correctCount + 1);
+    }
+    
+    // Update total questions answered
+    const totalQuestions = this.participantTotalQuestions.get(participantId) || 0;
+    this.participantTotalQuestions.set(participantId, totalQuestions + 1);
+  }
+  
+  // Generate real-time rankings
+  generateSessionRankings(sessionId: string): SessionStatistics {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return {
+        sessionId,
+        totalQuestions: 0,
+        currentQuestion: 0,
+        participantCount: 0,
+        rankings: [],
+        averageScore: 0,
+        topScore: 0,
+      };
+    }
+    
+    const rankings: RankingEntry[] = session.participants
+      .map(participant => {
+        const responseTimes = this.participantResponseTimes.get(participant.id) || [];
+        const correctAnswers = this.participantCorrectAnswers.get(participant.id) || 0;
+        const totalQuestions = this.participantTotalQuestions.get(participant.id) || 0;
+        const averageResponseTime = responseTimes.length > 0 
+          ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length 
+          : 0;
+        
+        return {
+          participantId: participant.id,
+          username: participant.username,
+          totalScore: participant.score,
+          correctAnswers,
+          totalQuestions,
+          averageResponseTime,
+          currentStreak: participant.streak,
+          bestStreak: participant.streak, // For now, same as current
+          rank: 0, // Will be assigned below
+        };
+      })
+      .sort((a, b) => {
+        // Primary sort: total score
+        if (b.totalScore !== a.totalScore) {
+          return b.totalScore - a.totalScore;
+        }
+        // Secondary sort: accuracy
+        const aAccuracy = a.totalQuestions > 0 ? a.correctAnswers / a.totalQuestions : 0;
+        const bAccuracy = b.totalQuestions > 0 ? b.correctAnswers / b.totalQuestions : 0;
+        if (bAccuracy !== aAccuracy) {
+          return bAccuracy - aAccuracy;
+        }
+        // Tertiary sort: average response time (faster is better)
+        return a.averageResponseTime - b.averageResponseTime;
+      });
+    
+    // Assign ranks
+    rankings.forEach((entry, index) => {
+      entry.rank = index + 1;
+    });
+    
+    // Calculate session statistics
+    const totalScores = rankings.map(r => r.totalScore);
+    const averageScore = totalScores.length > 0 ? totalScores.reduce((sum, score) => sum + score, 0) / totalScores.length : 0;
+    const topScore = totalScores.length > 0 ? Math.max(...totalScores) : 0;
+    
+    return {
+      sessionId,
+      totalQuestions: this.sampleQuestions.length,
+      currentQuestion: session.currentQuestion,
+      participantCount: session.participants.length,
+      rankings,
+      averageScore,
+      topScore,
+    };
+  }
+  
+  // Get participant statistics
+  getParticipantStatistics(participantId: string): ParticipantStatistics | null {
+    // Find participant in any session
+    let participant: Participant | null = null;
+    let sessionRankings: RankingEntry[] = [];
+    
+    for (const session of this.sessions.values()) {
+      const found = session.participants.find(p => p.id === participantId);
+      if (found) {
+        participant = found;
+        sessionRankings = this.generateSessionRankings(session.id).rankings;
+        break;
+      }
+    }
+    
+    if (!participant) {
+      return null;
+    }
+    
+    const responseTimes = this.participantResponseTimes.get(participantId) || [];
+    const correctAnswers = this.participantCorrectAnswers.get(participantId) || 0;
+    const totalQuestions = this.participantTotalQuestions.get(participantId) || 0;
+    const averageResponseTime = responseTimes.length > 0 
+      ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length 
+      : 0;
+    const accuracy = totalQuestions > 0 ? (correctAnswers / totalQuestions) * 100 : 0;
+    const currentRank = sessionRankings.find(r => r.participantId === participantId)?.rank || 0;
+    
+    return {
+      participantId,
+      username: participant.username,
+      totalScore: participant.score,
+      questionsAnswered: totalQuestions,
+      correctAnswers,
+      accuracy,
+      averageResponseTime,
+      currentStreak: participant.streak,
+      bestStreak: participant.streak, // For now, same as current
+      currentRank,
+    };
+  }
+  
   // For development/testing
   getSampleQuestions(): Question[] {
     return this.sampleQuestions;

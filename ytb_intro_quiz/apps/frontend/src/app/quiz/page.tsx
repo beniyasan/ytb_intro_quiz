@@ -4,11 +4,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { QuizButton } from '../../components/QuizButton';
 import { ResultList } from '../../components/ResultList';
+import { ParticipantStats } from '../../components/ParticipantStats';
 import { 
   QuizSession, 
   Participant, 
   Question, 
-  QuizResult 
+  QuizResult,
+  ParticipantStatistics
 } from '@ytb-quiz/shared';
 
 export default function QuizPage() {
@@ -23,6 +25,7 @@ export default function QuizPage() {
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [answeredParticipants, setAnsweredParticipants] = useState<string[]>([]);
+  const [participantStats, setParticipantStats] = useState<ParticipantStatistics | null>(null);
 
   const onSessionJoined = useCallback(({ session, participantId: pid }: { session: QuizSession; participantId: string }) => {
     console.log('Session joined successfully');
@@ -71,6 +74,23 @@ export default function QuizPage() {
     setAnsweredParticipants([]);
   }, []);
 
+  const onYoutubeQuestionStarted = useCallback(({ quiz, questionNumber: qNum }: { quiz: any; questionNumber: number }) => {
+    console.log('YouTube question started:', quiz.title);
+    // Convert YouTube quiz to Question format
+    const question = {
+      id: quiz.id,
+      text: `この曲の名前は？ (${quiz.title})`,
+      options: quiz.options,
+      correctAnswer: quiz.options.indexOf(quiz.correctAnswer),
+      timestamp: Date.now(),
+    };
+    setCurrentQuestion(question);
+    setQuestionNumber(qNum);
+    setHasAnswered(false);
+    setResults([]);
+    setAnsweredParticipants([]);
+  }, []);
+
   const onAnswerReceived = useCallback(({ participantId: answeredParticipantId, username: answeredUsername }: { participantId: string; username: string }) => {
     console.log(`Answer received from: ${answeredUsername}`);
     setAnsweredParticipants(prev => [...prev, answeredParticipantId]);
@@ -80,6 +100,13 @@ export default function QuizPage() {
     console.log('Question results received:', questionResults);
     setResults(questionResults);
     setCurrentQuestion(null); // Hide question when results are shown
+    
+    // Note: participant stats will be fetched after useWebSocket is initialized
+  }, []);
+
+  const onParticipantStats = useCallback((stats: ParticipantStatistics) => {
+    console.log('Participant stats received:', stats);
+    setParticipantStats(stats);
   }, []);
 
   const onError = useCallback(({ message }: { message: string }) => {
@@ -92,6 +119,7 @@ export default function QuizPage() {
     isConnected,
     joinSession,
     submitAnswer,
+    getParticipantStats,
   } = useWebSocket({
     onSessionJoined,
     onParticipantJoined,
@@ -99,8 +127,16 @@ export default function QuizPage() {
     onQuestionStarted,
     onAnswerReceived,
     onQuestionResults,
+    onParticipantStats,
     onError,
   });
+
+  // Fetch participant stats when results are received
+  useEffect(() => {
+    if (results.length > 0 && participantId && getParticipantStats) {
+      getParticipantStats(participantId);
+    }
+  }, [results, participantId, getParticipantStats]);
 
   const handleJoinSession = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -270,6 +306,14 @@ export default function QuizPage() {
             participantId={participantId}
             onSubmitAnswer={handleSubmitAnswer}
             hasAnswered={hasAnswered}
+          />
+        )}
+
+        {/* Participant Stats */}
+        {participantStats && (
+          <ParticipantStats 
+            stats={participantStats}
+            className="mb-6"
           />
         )}
 

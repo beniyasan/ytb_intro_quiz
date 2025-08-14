@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { QuizModule } from './websocket/quiz.module';
+import { YoutubeModule } from './youtube/youtube.module';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { QuizModule } from './websocket/quiz.module';
       isGlobal: true,
     }),
     QuizModule,
+    YoutubeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

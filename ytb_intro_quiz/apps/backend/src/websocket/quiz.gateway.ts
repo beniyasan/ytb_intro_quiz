@@ -11,12 +11,17 @@ import {
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { QuizService } from './quiz.service';
+import { YoutubeService } from '../youtube/youtube.service';
+import { YoutubeQuizService } from '../youtube/youtube-quiz.service';
 import {
   QuizSession,
   Participant,
   QuizAnswer,
   Question,
   WebSocketEvents,
+  YoutubeQuiz,
+  VideoSearchResult,
+  VideoDetails,
 } from '@ytb-quiz/shared';
 
 @WebSocketGateway({
@@ -35,7 +40,11 @@ export class QuizGateway
 
   private readonly logger = new Logger(QuizGateway.name);
 
-  constructor(private readonly quizService: QuizService) {}
+  constructor(
+    private readonly quizService: QuizService,
+    private readonly youtubeService: YoutubeService,
+    private readonly youtubeQuizService: YoutubeQuizService,
+  ) {}
 
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway initialized for /quiz namespace');
@@ -221,6 +230,10 @@ export class QuizGateway
       const results = this.quizService.getQuestionResults(sessionId, questionId);
       this.server.to(sessionId).emit('question-results', results);
 
+      // Generate and send updated rankings
+      const sessionStats = this.quizService.generateSessionRankings(sessionId);
+      this.server.to(sessionId).emit('rankings-updated', sessionStats);
+
       this.logger.log(`Question ${questionId} ended in session ${sessionId}`);
     } catch (error) {
       this.logger.error(`Error ending question: ${error.message}`);
@@ -265,6 +278,226 @@ export class QuizGateway
       client.emit('session-info', session);
     } else {
       client.emit('error', { message: 'Session not found' });
+    }
+  }
+
+  // Get current rankings for a session
+  @SubscribeMessage('get-rankings')
+  handleGetRankings(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string },
+  ) {
+    try {
+      const sessionStats = this.quizService.generateSessionRankings(data.sessionId);
+      client.emit('rankings-updated', sessionStats);
+    } catch (error) {
+      this.logger.error(`Error getting rankings: ${error.message}`);
+      client.emit('error', { message: 'Failed to get rankings' });
+    }
+  }
+
+  // Get participant statistics
+  @SubscribeMessage('get-participant-stats')
+  handleGetParticipantStats(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { participantId: string },
+  ) {
+    try {
+      const stats = this.quizService.getParticipantStatistics(data.participantId);
+      if (stats) {
+        client.emit('participant-stats', stats);
+      } else {
+        client.emit('error', { message: 'Participant not found' });
+      }
+    } catch (error) {
+      this.logger.error(`Error getting participant stats: ${error.message}`);
+      client.emit('error', { message: 'Failed to get participant stats' });
+    }
+  }
+
+  // YouTube API methods
+  @SubscribeMessage('search-youtube-videos')
+  async handleSearchYoutubeVideos(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { query: string },
+  ) {
+    try {
+      this.logger.log(`Searching YouTube videos: "${data.query}"`);
+      const results = await this.youtubeService.searchMusicVideos(data.query, 20);
+      client.emit('youtube-search-results', results);
+    } catch (error) {
+      this.logger.error(`Error searching YouTube videos: ${error.message}`);
+      client.emit('error', { message: 'Failed to search YouTube videos' });
+    }
+  }
+
+  @SubscribeMessage('get-video-details')
+  async handleGetVideoDetails(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { videoId: string },
+  ) {
+    try {
+      this.logger.log(`Getting video details: ${data.videoId}`);
+      const details = await this.youtubeService.getVideoDetails(data.videoId);
+      client.emit('video-details', details);
+    } catch (error) {
+      this.logger.error(`Error getting video details: ${error.message}`);
+      client.emit('error', { message: 'Failed to get video details' });
+    }
+  }
+
+  // YouTube Quiz management methods
+  @SubscribeMessage('create-youtube-quiz')
+  async handleCreateYoutubeQuiz(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: Omit<YoutubeQuiz, 'id' | 'createdAt' | 'updatedAt'>,
+  ) {
+    try {
+      this.logger.log(`Creating YouTube quiz: "${data.title}"`);
+      
+      // Validate quiz data
+      const errors = this.youtubeQuizService.validateQuizData(data);
+      if (errors.length > 0) {
+        client.emit('error', { message: `Validation errors: ${errors.join(', ')}` });
+        return;
+      }
+
+      // Validate video ID (skip if YouTube API not available)
+      const isValidVideo = await this.youtubeService.validateVideoId(data.videoId);
+      if (isValidVideo === false) { // Only reject if explicitly false, allow null (API unavailable)
+        client.emit('error', { message: 'Invalid YouTube video ID' });
+        return;
+      }
+      
+      // Log validation result for debugging
+      this.logger.log(`Video validation result for ${data.videoId}: ${isValidVideo}`);
+
+      const quiz = this.youtubeQuizService.createQuiz(data);
+      client.emit('youtube-quiz-created', quiz);
+      
+      this.logger.log(`YouTube quiz created: ${quiz.id}`);
+    } catch (error) {
+      this.logger.error(`Error creating YouTube quiz: ${error.message}`);
+      client.emit('error', { message: 'Failed to create YouTube quiz' });
+    }
+  }
+
+  @SubscribeMessage('update-youtube-quiz')
+  async handleUpdateYoutubeQuiz(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: YoutubeQuiz,
+  ) {
+    try {
+      this.logger.log(`Updating YouTube quiz: ${data.id}`);
+      
+      const updatedQuiz = this.youtubeQuizService.updateQuiz(data.id, data);
+      if (!updatedQuiz) {
+        client.emit('error', { message: 'YouTube quiz not found' });
+        return;
+      }
+
+      client.emit('youtube-quiz-updated', updatedQuiz);
+    } catch (error) {
+      this.logger.error(`Error updating YouTube quiz: ${error.message}`);
+      client.emit('error', { message: 'Failed to update YouTube quiz' });
+    }
+  }
+
+  @SubscribeMessage('delete-youtube-quiz')
+  async handleDeleteYoutubeQuiz(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { quizId: string },
+  ) {
+    try {
+      this.logger.log(`Deleting YouTube quiz: ${data.quizId}`);
+      
+      const deleted = this.youtubeQuizService.deleteQuiz(data.quizId);
+      if (!deleted) {
+        client.emit('error', { message: 'YouTube quiz not found' });
+        return;
+      }
+
+      client.emit('youtube-quiz-deleted', { quizId: data.quizId });
+    } catch (error) {
+      this.logger.error(`Error deleting YouTube quiz: ${error.message}`);
+      client.emit('error', { message: 'Failed to delete YouTube quiz' });
+    }
+  }
+
+  @SubscribeMessage('get-youtube-quizzes')
+  handleGetYoutubeQuizzes(@ConnectedSocket() client: Socket) {
+    try {
+      const quizzes = this.youtubeQuizService.getAllQuizzes();
+      client.emit('youtube-quizzes', quizzes);
+    } catch (error) {
+      this.logger.error(`Error getting YouTube quizzes: ${error.message}`);
+      client.emit('error', { message: 'Failed to get YouTube quizzes' });
+    }
+  }
+
+  @SubscribeMessage('get-session-youtube-quizzes')
+  handleGetSessionYoutubeQuizzes(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string },
+  ) {
+    try {
+      const quizzes = this.youtubeQuizService.getQuizzesBySession(data.sessionId);
+      client.emit('session-youtube-quizzes', quizzes);
+    } catch (error) {
+      this.logger.error(`Error getting session YouTube quizzes: ${error.message}`);
+      client.emit('error', { message: 'Failed to get session YouTube quizzes' });
+    }
+  }
+
+  @SubscribeMessage('add-quiz-to-session')
+  handleAddQuizToSession(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; quizId: string },
+  ) {
+    try {
+      const success = this.youtubeQuizService.addQuizToSession(data.sessionId, data.quizId);
+      if (!success) {
+        client.emit('error', { message: 'Failed to add quiz to session' });
+        return;
+      }
+
+      // Get updated session quizzes
+      const quizzes = this.youtubeQuizService.getQuizzesBySession(data.sessionId);
+      this.server.to(data.sessionId).emit('session-youtube-quizzes', quizzes);
+    } catch (error) {
+      this.logger.error(`Error adding quiz to session: ${error.message}`);
+      client.emit('error', { message: 'Failed to add quiz to session' });
+    }
+  }
+
+  @SubscribeMessage('start-youtube-question')
+  async handleStartYoutubeQuestion(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string; quizId: string },
+  ) {
+    try {
+      const quiz = this.youtubeQuizService.getQuiz(data.quizId);
+      if (!quiz) {
+        client.emit('error', { message: 'YouTube quiz not found' });
+        return;
+      }
+
+      const session = this.quizService.getSession(data.sessionId);
+      if (!session) {
+        client.emit('error', { message: 'Session not found' });
+        return;
+      }
+
+      // Start the YouTube quiz question
+      this.server.to(data.sessionId).emit('youtube-question-started', {
+        quiz,
+        questionNumber: session.currentQuestion + 1,
+      });
+
+      this.logger.log(`YouTube question started: ${quiz.title} in session ${data.sessionId}`);
+    } catch (error) {
+      this.logger.error(`Error starting YouTube question: ${error.message}`);
+      client.emit('error', { message: 'Failed to start YouTube question' });
     }
   }
 }
