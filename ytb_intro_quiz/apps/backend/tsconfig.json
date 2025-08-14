@@ -18,7 +18,7 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@ytb-quiz/shared": ["../../packages/shared/src"]
+      "@ytb-quiz/shared": ["../../packages/shared/dist"]
     }
   }
 }

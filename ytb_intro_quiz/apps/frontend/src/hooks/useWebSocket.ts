@@ -9,6 +9,12 @@ import {
   QuizResult,
   Question,
   WebSocketEvents,
+  SessionStatistics,
+  ParticipantStatistics,
+  RankingEntry,
+  YoutubeQuiz,
+  VideoSearchResult,
+  VideoDetails,
 } from '@ytb-quiz/shared';
 
 interface UseWebSocketProps {
@@ -18,7 +24,20 @@ interface UseWebSocketProps {
   onQuestionStarted?: (data: { question: Question; questionNumber: number }) => void;
   onAnswerReceived?: (data: { participantId: string; username: string }) => void;
   onQuestionResults?: (results: QuizResult[]) => void;
-  onSessionEnded?: (data: { finalResults: QuizResult[] }) => void;
+  onRankingsUpdated?: (sessionStats: SessionStatistics) => void;
+  onParticipantStats?: (stats: ParticipantStatistics) => void;
+  onSessionEnded?: (data: { finalResults: QuizResult[]; finalRankings?: RankingEntry[] }) => void;
+  
+  // YouTube callbacks
+  onYoutubeSearchResults?: (results: VideoSearchResult[]) => void;
+  onVideoDetails?: (details: VideoDetails) => void;
+  onYoutubeQuizCreated?: (quiz: YoutubeQuiz) => void;
+  onYoutubeQuizUpdated?: (quiz: YoutubeQuiz) => void;
+  onYoutubeQuizDeleted?: (data: { quizId: string }) => void;
+  onYoutubeQuizzes?: (quizzes: YoutubeQuiz[]) => void;
+  onSessionYoutubeQuizzes?: (quizzes: YoutubeQuiz[]) => void;
+  onYoutubeQuestionStarted?: (data: { quiz: YoutubeQuiz; questionNumber: number }) => void;
+  
   onError?: (data: { message: string }) => void;
 }
 
@@ -33,6 +52,20 @@ interface UseWebSocketReturn {
   createSession: (title: string) => void;
   getSampleQuestions: () => void;
   getSessionInfo: (sessionId: string) => void;
+  getRankings: (sessionId: string) => void;
+  getParticipantStats: (participantId: string) => void;
+  
+  // YouTube methods
+  searchYoutubeVideos: (query: string) => void;
+  getVideoDetails: (videoId: string) => void;
+  createYoutubeQuiz: (quiz: Omit<YoutubeQuiz, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateYoutubeQuiz: (quiz: YoutubeQuiz) => void;
+  deleteYoutubeQuiz: (quizId: string) => void;
+  getYoutubeQuizzes: () => void;
+  getSessionYoutubeQuizzes: (sessionId: string) => void;
+  addQuizToSession: (sessionId: string, quizId: string) => void;
+  startYoutubeQuestion: (sessionId: string, quizId: string) => void;
+  
   disconnect: () => void;
 }
 
@@ -44,7 +77,17 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
     onQuestionStarted,
     onAnswerReceived,
     onQuestionResults,
+    onRankingsUpdated,
+    onParticipantStats,
     onSessionEnded,
+    onYoutubeSearchResults,
+    onVideoDetails,
+    onYoutubeQuizCreated,
+    onYoutubeQuizUpdated,
+    onYoutubeQuizDeleted,
+    onYoutubeQuizzes,
+    onSessionYoutubeQuizzes,
+    onYoutubeQuestionStarted,
     onError,
   } = props;
 
@@ -162,6 +205,57 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
       console.log('Sample questions:', questions);
     });
 
+    socketInstance.on('rankings-updated', (sessionStats: SessionStatistics) => {
+      console.log('Rankings updated:', sessionStats);
+      onRankingsUpdated?.(sessionStats);
+    });
+
+    socketInstance.on('participant-stats', (stats: ParticipantStatistics) => {
+      console.log('Participant stats:', stats);
+      onParticipantStats?.(stats);
+    });
+
+    // YouTube event handlers
+    socketInstance.on('youtube-search-results', (results: VideoSearchResult[]) => {
+      console.log('YouTube search results:', results);
+      onYoutubeSearchResults?.(results);
+    });
+
+    socketInstance.on('video-details', (details: VideoDetails) => {
+      console.log('Video details:', details);
+      onVideoDetails?.(details);
+    });
+
+    socketInstance.on('youtube-quiz-created', (quiz: YoutubeQuiz) => {
+      console.log('YouTube quiz created:', quiz);
+      onYoutubeQuizCreated?.(quiz);
+    });
+
+    socketInstance.on('youtube-quiz-updated', (quiz: YoutubeQuiz) => {
+      console.log('YouTube quiz updated:', quiz);
+      onYoutubeQuizUpdated?.(quiz);
+    });
+
+    socketInstance.on('youtube-quiz-deleted', (data: { quizId: string }) => {
+      console.log('YouTube quiz deleted:', data);
+      onYoutubeQuizDeleted?.(data);
+    });
+
+    socketInstance.on('youtube-quizzes', (quizzes: YoutubeQuiz[]) => {
+      console.log('YouTube quizzes:', quizzes);
+      onYoutubeQuizzes?.(quizzes);
+    });
+
+    socketInstance.on('session-youtube-quizzes', (quizzes: YoutubeQuiz[]) => {
+      console.log('Session YouTube quizzes:', quizzes);
+      onSessionYoutubeQuizzes?.(quizzes);
+    });
+
+    socketInstance.on('youtube-question-started', (data: { quiz: YoutubeQuiz; questionNumber: number }) => {
+      console.log('YouTube question started:', data);
+      onYoutubeQuestionStarted?.(data);
+    });
+
     socketRef.current = socketInstance;
     setSocket(socketInstance);
 
@@ -228,6 +322,84 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
     }
   }, []);
 
+  const getRankings = useCallback((sessionId: string) => {
+    if (socketRef.current) {
+      console.log('Getting rankings for session:', sessionId);
+      socketRef.current.emit('get-rankings', { sessionId });
+    }
+  }, []);
+
+  const getParticipantStats = useCallback((participantId: string) => {
+    if (socketRef.current) {
+      console.log('Getting participant stats:', participantId);
+      socketRef.current.emit('get-participant-stats', { participantId });
+    }
+  }, []);
+
+  // YouTube methods
+  const searchYoutubeVideos = useCallback((query: string) => {
+    if (socketRef.current) {
+      console.log('Searching YouTube videos:', query);
+      socketRef.current.emit('search-youtube-videos', { query });
+    }
+  }, []);
+
+  const getVideoDetails = useCallback((videoId: string) => {
+    if (socketRef.current) {
+      console.log('Getting video details:', videoId);
+      socketRef.current.emit('get-video-details', { videoId });
+    }
+  }, []);
+
+  const createYoutubeQuiz = useCallback((quiz: Omit<YoutubeQuiz, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (socketRef.current) {
+      console.log('Creating YouTube quiz:', quiz);
+      socketRef.current.emit('create-youtube-quiz', quiz);
+    }
+  }, []);
+
+  const updateYoutubeQuiz = useCallback((quiz: YoutubeQuiz) => {
+    if (socketRef.current) {
+      console.log('Updating YouTube quiz:', quiz);
+      socketRef.current.emit('update-youtube-quiz', quiz);
+    }
+  }, []);
+
+  const deleteYoutubeQuiz = useCallback((quizId: string) => {
+    if (socketRef.current) {
+      console.log('Deleting YouTube quiz:', quizId);
+      socketRef.current.emit('delete-youtube-quiz', { quizId });
+    }
+  }, []);
+
+  const getYoutubeQuizzes = useCallback(() => {
+    if (socketRef.current) {
+      console.log('Getting YouTube quizzes');
+      socketRef.current.emit('get-youtube-quizzes');
+    }
+  }, []);
+
+  const getSessionYoutubeQuizzes = useCallback((sessionId: string) => {
+    if (socketRef.current) {
+      console.log('Getting session YouTube quizzes:', sessionId);
+      socketRef.current.emit('get-session-youtube-quizzes', { sessionId });
+    }
+  }, []);
+
+  const addQuizToSession = useCallback((sessionId: string, quizId: string) => {
+    if (socketRef.current) {
+      console.log('Adding quiz to session:', { sessionId, quizId });
+      socketRef.current.emit('add-quiz-to-session', { sessionId, quizId });
+    }
+  }, []);
+
+  const startYoutubeQuestion = useCallback((sessionId: string, quizId: string) => {
+    if (socketRef.current) {
+      console.log('Starting YouTube question:', { sessionId, quizId });
+      socketRef.current.emit('start-youtube-question', { sessionId, quizId });
+    }
+  }, []);
+
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       console.log('Manually disconnecting');
@@ -246,6 +418,17 @@ export const useWebSocket = (props: UseWebSocketProps = {}): UseWebSocketReturn 
     createSession,
     getSampleQuestions,
     getSessionInfo,
+    getRankings,
+    getParticipantStats,
+    searchYoutubeVideos,
+    getVideoDetails,
+    createYoutubeQuiz,
+    updateYoutubeQuiz,
+    deleteYoutubeQuiz,
+    getYoutubeQuizzes,
+    getSessionYoutubeQuizzes,
+    addQuizToSession,
+    startYoutubeQuestion,
     disconnect,
   };
 };
