@@ -5,12 +5,14 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { QuizButton } from '../../components/QuizButton';
 import { ResultList } from '../../components/ResultList';
 import { ParticipantStats } from '../../components/ParticipantStats';
+import { RankingList } from '../../components/RankingList';
 import { 
   QuizSession, 
   Participant, 
   Question, 
   QuizResult,
-  ParticipantStatistics
+  ParticipantStatistics,
+  SessionStatistics
 } from '@ytb-quiz/shared';
 
 export default function QuizPage() {
@@ -26,6 +28,7 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [answeredParticipants, setAnsweredParticipants] = useState<string[]>([]);
   const [participantStats, setParticipantStats] = useState<ParticipantStatistics | null>(null);
+  const [sessionStats, setSessionStats] = useState<SessionStatistics | null>(null);
 
   const onSessionJoined = useCallback(({ session, participantId: pid }: { session: QuizSession; participantId: string }) => {
     console.log('Session joined successfully');
@@ -109,6 +112,11 @@ export default function QuizPage() {
     setParticipantStats(stats);
   }, []);
 
+  const onRankingsUpdated = useCallback((stats: SessionStatistics) => {
+    console.log('Rankings updated:', stats);
+    setSessionStats(stats);
+  }, []);
+
   const onError = useCallback(({ message }: { message: string }) => {
     console.error('WebSocket error:', message);
     setError(message);
@@ -128,6 +136,7 @@ export default function QuizPage() {
     onAnswerReceived,
     onQuestionResults,
     onParticipantStats,
+    onRankingsUpdated,
     onError,
   });
 
@@ -314,6 +323,16 @@ export default function QuizPage() {
           <ParticipantStats 
             stats={participantStats}
             className="mb-6"
+          />
+        )}
+
+        {/* Rankings */}
+        {sessionStats && (
+          <RankingList 
+            sessionStats={sessionStats}
+            title="現在のランキング"
+            highlightParticipantId={participantId || undefined}
+            showStats={true}
           />
         )}
 

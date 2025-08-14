@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RankingEntry, SessionStatistics } from '@ytb-quiz/shared';
 
 interface RankingListProps {
@@ -17,6 +17,31 @@ export function RankingList({
   showStats = true 
 }: RankingListProps) {
   const { rankings, averageScore, topScore, currentQuestion, totalQuestions } = sessionStats;
+  const [previousRankings, setPreviousRankings] = useState<RankingEntry[]>([]);
+  const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Detect rank changes
+    const newAnimatingIds = new Set<string>();
+    
+    rankings.forEach(entry => {
+      const prevEntry = previousRankings.find(p => p.participantId === entry.participantId);
+      if (prevEntry && prevEntry.rank !== entry.rank) {
+        newAnimatingIds.add(entry.participantId);
+      }
+    });
+
+    setAnimatingIds(newAnimatingIds);
+    setPreviousRankings(rankings);
+
+    // Clear animations after 500ms
+    if (newAnimatingIds.size > 0) {
+      const timer = setTimeout(() => {
+        setAnimatingIds(new Set());
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [rankings]);
 
   const getRankColor = (rank: number) => {
     switch (rank) {
@@ -82,12 +107,20 @@ export function RankingList({
             <div
               key={entry.participantId}
               className={`
-                p-4 rounded-lg border-2 transition-all duration-200
+                p-4 rounded-lg border-2 transition-all duration-500
                 ${entry.participantId === highlightParticipantId 
                   ? 'ring-2 ring-blue-400 border-blue-400' 
                   : getRankColor(entry.rank)
                 }
+                ${animatingIds.has(entry.participantId) 
+                  ? 'transform scale-105 shadow-lg animate-pulse' 
+                  : ''}
               `}
+              style={{
+                animation: animatingIds.has(entry.participantId) 
+                  ? 'rankChange 0.5s ease-in-out' 
+                  : undefined
+              }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -131,4 +164,19 @@ export function RankingList({
       )}
     </div>
   );
+}
+
+// Add CSS animation keyframes in a style tag or CSS file
+if (typeof window !== 'undefined' && !document.getElementById('ranking-animations')) {
+  const style = document.createElement('style');
+  style.id = 'ranking-animations';
+  style.textContent = `
+    @keyframes rankChange {
+      0% { transform: translateX(0) scale(1); }
+      25% { transform: translateX(-10px) scale(1.05); }
+      75% { transform: translateX(10px) scale(1.05); }
+      100% { transform: translateX(0) scale(1); }
+    }
+  `;
+  document.head.appendChild(style);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ParticipantStatistics } from '@ytb-quiz/shared';
 
 interface ParticipantStatsProps {
@@ -9,6 +9,26 @@ interface ParticipantStatsProps {
 }
 
 export function ParticipantStats({ stats, className = "" }: ParticipantStatsProps) {
+  const [previousScore, setPreviousScore] = useState(stats.totalScore);
+  const [scoreChanged, setScoreChanged] = useState(false);
+  const [previousRank, setPreviousRank] = useState(stats.currentRank);
+  const [rankChanged, setRankChanged] = useState(false);
+
+  useEffect(() => {
+    // Detect score change
+    if (stats.totalScore !== previousScore) {
+      setScoreChanged(true);
+      setPreviousScore(stats.totalScore);
+      setTimeout(() => setScoreChanged(false), 1000);
+    }
+
+    // Detect rank change
+    if (stats.currentRank !== previousRank) {
+      setRankChanged(true);
+      setPreviousRank(stats.currentRank);
+      setTimeout(() => setRankChanged(false), 1000);
+    }
+  }, [stats.totalScore, stats.currentRank, previousScore, previousRank]);
   const formatResponseTime = (time: number) => {
     return time > 0 ? `${(time / 1000).toFixed(1)}秒` : '-';
   };
@@ -32,7 +52,9 @@ export function ParticipantStats({ stats, className = "" }: ParticipantStatsProp
         <h3 className="text-lg font-bold text-gray-800">
           {stats.username} の成績
         </h3>
-        <div className={`text-2xl font-bold ${getRankColor(stats.currentRank)}`}>
+        <div className={`text-2xl font-bold ${getRankColor(stats.currentRank)} ${
+          rankChanged ? 'animate-bounce' : ''
+        }`}>
           {stats.currentRank === 1 ? '🥇' : 
            stats.currentRank === 2 ? '🥈' : 
            stats.currentRank === 3 ? '🥉' : 
@@ -42,8 +64,13 @@ export function ParticipantStats({ stats, className = "" }: ParticipantStatsProp
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="text-center">
-          <div className="text-2xl font-bold text-indigo-600">
+          <div className={`text-2xl font-bold text-indigo-600 transition-all duration-300 ${
+            scoreChanged ? 'transform scale-125 text-green-600' : ''
+          }`}>
             {stats.totalScore}
+            {scoreChanged && (
+              <span className="ml-1 text-sm text-green-500 animate-ping">+</span>
+            )}
           </div>
           <div className="text-sm text-gray-600">総スコア</div>
         </div>
